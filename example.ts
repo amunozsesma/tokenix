@@ -1,4 +1,4 @@
-import { LLMCreditSDK, createSDK, DEFAULT_CONFIG } from './src/index';
+import { LLMCreditSDK, createSDK, DEFAULT_CONFIG, TokenExtractor, openAIChatExtractor, OpenAIChatCompletionResponse } from './src/index';
 
 /**
  * Example usage of the LLM Credit SDK
@@ -36,7 +36,7 @@ async function main() {
         estimatedCredits: reconciliation.estimatedCredits,
         actualTokensUsed: reconciliation.actualTokensUsed,
         actualCost: reconciliation.actualCost,
-        estimatedVsActualDelta: reconciliation.estimatedVsActualDelta
+        estimatedVsActualCreditDelta: reconciliation.estimatedVsActualCreditDelta
     });
     console.log();
 
@@ -84,29 +84,36 @@ async function main() {
     console.log(`Custom model estimate: ${customEstimate.estimatedCredits} credits\n`);
 
     // Example 5: Wrapped LLM call simulation
-    console.log('🌯 Example 5: Wrapped LLM Call');
+    console.log('🌯 Example 5: Wrapped LLM Call with OpenAI Extractor');
 
-    // Mock LLM response
-    interface MockLLMResponse {
-        text: string;
+    // Mock OpenAI Chat Completion response following the official API format
+    const mockOpenAIResponse: OpenAIChatCompletionResponse = {
+        id: "chatcmpl-7QmVI15qgYVllxK0FtxVGG6ywfzaq",
+        object: "chat.completion",
+        created: 1686617332,
+        model: "gpt-4",
+        choices: [{
+            index: 0,
+            message: {
+                role: "assistant",
+                content: "This is a mock response from OpenAI's Chat Completions API."
+            },
+            finish_reason: "stop"
+        }],
         usage: {
-            prompt_tokens: number;
-            completion_tokens: number;
-        };
-    }
+            prompt_tokens: 155, // Slightly different from estimate
+            completion_tokens: 345,
+            total_tokens: 500
+        },
+        system_fingerprint: "fp_3a215618e8"
+    };
 
-    // Simulate an LLM API call
-    const mockLLMCall = async (): Promise<MockLLMResponse> => {
+    // Simulate an OpenAI Chat Completions API call
+    const mockOpenAICall = async (): Promise<OpenAIChatCompletionResponse> => {
         // Simulate API delay
         await new Promise(resolve => setTimeout(resolve, 100));
 
-        return {
-            text: "This is a mock response from the LLM.",
-            usage: {
-                prompt_tokens: 155, // Slightly different from estimate
-                completion_tokens: 345
-            }
-        };
+        return mockOpenAIResponse;
     };
 
     const wrappedResult = await sdk.wrapCall({
@@ -114,19 +121,16 @@ async function main() {
         feature: 'chat',
         promptTokens: 150, // Our estimate
         completionTokens: 350, // Our estimate
-        callFunction: mockLLMCall,
-        extractActualTokens: (response) => ({
-            promptTokens: response.usage.prompt_tokens,
-            completionTokens: response.usage.completion_tokens
-        })
+        callFunction: mockOpenAICall,
+        tokenExtractor: openAIChatExtractor
     });
 
-    console.log('LLM Response:', wrappedResult.response.text);
+    console.log('LLM Response:', wrappedResult.response.choices[0].message.content);
     console.log('Usage reconciliation:', {
         estimatedCredits: wrappedResult.reconciliation.estimatedCredits,
         actualTokensUsed: wrappedResult.reconciliation.actualTokensUsed,
         actualCost: wrappedResult.reconciliation.actualCost,
-        delta: wrappedResult.reconciliation.estimatedVsActualDelta
+        delta: wrappedResult.reconciliation.estimatedVsActualCreditDelta
     });
     console.log();
 
