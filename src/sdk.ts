@@ -6,7 +6,9 @@ import {
     ReconcileInput,
     ReconcileResult,
     WrapCallInput,
-    WrapCallResult
+    WrapCallResult,
+    TokenExtractor,
+    TokenUsage
 } from './types';
 import { DEFAULT_CONFIG } from './config';
 
@@ -75,8 +77,13 @@ export class LLMCreditSDK {
             completionTokens
         });
 
-        // Calculate actual usage
+        // Calculate estimated cost (without margin)
         const modelConfig = this.getModelConfig(model);
+        const estimatedPromptCost = (promptTokens / 1000) * modelConfig.prompt_cost_per_1k;
+        const estimatedCompletionCost = (completionTokens / 1000) * modelConfig.completion_cost_per_1k;
+        const estimatedCost = estimatedPromptCost + estimatedCompletionCost;
+
+        // Calculate actual usage
         const actualPromptCost = (actualPromptTokens / 1000) * modelConfig.prompt_cost_per_1k;
         const actualCompletionCost = (actualCompletionTokens / 1000) * modelConfig.completion_cost_per_1k;
         const actualCost = actualPromptCost + actualCompletionCost;
@@ -86,14 +93,18 @@ export class LLMCreditSDK {
         const margin = this.getMarginForFeature(modelConfig, feature);
         const actualCredits = actualCost * margin;
 
-        // Calculate delta (positive means we underestimated, negative means overestimated)
-        const estimatedVsActualDelta = actualCredits - estimated.estimatedCredits;
+        // Calculate deltas
+        const estimatedVsActualCreditDelta = actualCredits - estimated.estimatedCredits;
+        const costDelta = actualCost - estimatedCost;
+        const marginDelta = (actualCredits / actualCost) - (estimated.estimatedCredits / estimatedCost);
 
         return {
             estimatedCredits: estimated.estimatedCredits,
             actualTokensUsed,
             actualCost: Number(actualCost.toFixed(6)),
-            estimatedVsActualDelta: Number(estimatedVsActualDelta.toFixed(6))
+            estimatedVsActualCreditDelta: Number(estimatedVsActualCreditDelta.toFixed(6)),
+            costDelta: Number(costDelta.toFixed(6)),
+            marginDelta: Number(marginDelta.toFixed(6))
         };
     }
 
@@ -103,7 +114,7 @@ export class LLMCreditSDK {
      * @returns Response from the LLM call plus reconciliation data
      */
     async wrapCall<T>(input: WrapCallInput<T>): Promise<WrapCallResult<T>> {
-        const { model, feature, promptTokens, completionTokens, callFunction, extractActualTokens } = input;
+        const { model, feature, promptTokens, completionTokens, callFunction, tokenExtractor } = input;
 
         // Get initial estimate
         const estimate = this.estimateCredits({
@@ -116,15 +127,16 @@ export class LLMCreditSDK {
         // Make the actual LLM call
         const response = await callFunction();
 
-        // Extract actual token usage if extractor is provided, otherwise use estimates
+        // Extract actual token usage using the provided extractor
         let actualPromptTokens = promptTokens;
         let actualCompletionTokens = completionTokens;
 
-        if (extractActualTokens) {
-            const actualTokens = extractActualTokens(response);
-            actualPromptTokens = actualTokens.promptTokens;
-            actualCompletionTokens = actualTokens.completionTokens;
+        if (tokenExtractor) {
+            const tokenUsage = tokenExtractor.extract(response);
+            actualPromptTokens = tokenUsage.promptTokens;
+            actualCompletionTokens = tokenUsage.completionTokens;
         }
+        // If no extractor is provided, use the original estimates
 
         // Reconcile actual vs estimated
         const reconciliation = this.reconcile({

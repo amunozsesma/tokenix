@@ -11,11 +11,21 @@ export type {
     ReconcileInput,
     ReconcileResult,
     WrapCallInput,
-    WrapCallResult
+    WrapCallResult,
+    TokenExtractor,
+    TokenUsage
 } from './types';
 
 // Export default configuration
 export { DEFAULT_CONFIG } from './config';
+
+// Export extractors library
+export {
+    openAIChatExtractor,
+    openAIGenericExtractor,
+    OPENAI_EXTRACTORS,
+    type OpenAIChatCompletionResponse
+} from './extractors';
 
 // Create a convenience function for quick initialization
 import { LLMCreditSDK } from './sdk';

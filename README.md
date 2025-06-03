@@ -44,7 +44,7 @@ const reconciliation = sdk.reconcile({
   actualPromptTokens: 160,
   actualCompletionTokens: 340
 });
-console.log('Usage delta:', reconciliation.estimatedVsActualDelta);
+console.log('Usage delta:', reconciliation.estimatedVsActualCreditDelta);
 ```
 
 ## Core Concepts
@@ -98,7 +98,7 @@ interface ReconcileResult {
   estimatedCredits: number;     // Original estimate
   actualTokensUsed: number;     // Total actual tokens
   actualCost: number;           // Actual cost in dollars
-  estimatedVsActualDelta: number; // Difference (+ = underestimated)
+  estimatedVsActualCreditDelta: number; // Difference (+ = underestimated)
 }
 ```
 
@@ -113,10 +113,7 @@ interface WrapCallInput<T> {
   promptTokens: number;
   completionTokens: number;
   callFunction: () => Promise<T>;
-  extractActualTokens?: (response: T) => {
-    promptTokens: number;
-    completionTokens: number;
-  };
+  tokenExtractor?: TokenExtractor<T>;
 }
 
 interface WrapCallResult<T> {
@@ -127,24 +124,39 @@ interface WrapCallResult<T> {
 
 **Example:**
 ```typescript
+import { TokenExtractor, openAIChatExtractor, OpenAIChatCompletionResponse } from 'llm-credit-sdk';
+
+// Using the built-in OpenAI extractor (recommended)
 const result = await sdk.wrapCall({
   model: 'openai:gpt-4',
   feature: 'chat',
   promptTokens: 150,
   completionTokens: 350,
   callFunction: async () => {
-    // Your LLM API call here
-    return await openai.chat.completions.create({...});
+    return await openai.chat.completions.create({
+      model: 'gpt-4',
+      messages: [{ role: 'user', content: 'Hello!' }]
+    });
   },
-  extractActualTokens: (response) => ({
-    promptTokens: response.usage.prompt_tokens,
-    completionTokens: response.usage.completion_tokens
-  })
+  tokenExtractor: openAIChatExtractor
 });
+
+// Or create a custom extractor for specific needs
+const customExtractor: TokenExtractor<OpenAIChatCompletionResponse> = {
+  providerName: 'openai',
+  description: 'OpenAI Chat Completions API',
+  apiVersion: 'v1',
+  extract: (response) => ({
+    promptTokens: response.usage?.prompt_tokens || 0,
+    completionTokens: response.usage?.completion_tokens || 0
+  })
+};
 
 console.log('Response:', result.response);
 console.log('Credits used:', result.reconciliation.actualTokensUsed);
 ```
+
+> **📖 Learn More**: For detailed information about creating and using token extractors, see our [Token Extractors Guide](docs/token-extractors.md).
 
 ## Supported Models
 
@@ -234,7 +246,7 @@ try {
 
 ```typescript
 import OpenAI from 'openai';
-import { LLMCreditSDK } from 'llm-credit-sdk';
+import { LLMCreditSDK, openAIChatExtractor } from 'llm-credit-sdk';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const sdk = new LLMCreditSDK();
@@ -251,10 +263,7 @@ async function chatWithGPT(message: string, userId: string) {
         messages: [{ role: 'user', content: message }]
       });
     },
-    extractActualTokens: (response) => ({
-      promptTokens: response.usage?.prompt_tokens || 0,
-      completionTokens: response.usage?.completion_tokens || 0
-    })
+    tokenExtractor: openAIChatExtractor
   });
 
   // Log usage for billing
