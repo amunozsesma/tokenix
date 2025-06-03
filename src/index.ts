@@ -13,7 +13,9 @@ export type {
     WrapCallInput,
     WrapCallResult,
     TokenExtractor,
-    TokenUsage
+    TokenUsage,
+    DashboardSyncConfig,
+    ReconciliationLog
 } from './types';
 
 // Export default configuration
@@ -26,6 +28,9 @@ export {
     OPENAI_EXTRACTORS,
     type OpenAIChatCompletionResponse
 } from './extractors';
+
+// Export dashboard client for advanced usage
+export { DashboardClient } from './dashboardClient';
 
 // Create a convenience function for quick initialization
 import { LLMCreditSDK } from './sdk';

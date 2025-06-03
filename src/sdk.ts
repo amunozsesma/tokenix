@@ -8,15 +8,51 @@ import {
     WrapCallInput,
     WrapCallResult,
     TokenExtractor,
-    TokenUsage
+    TokenUsage,
+    DashboardSyncConfig,
+    ReconciliationLog
 } from './types';
 import { DEFAULT_CONFIG } from './config';
+import { DashboardClient } from './dashboardClient';
+
+/**
+ * Simple event emitter for internal SDK events
+ */
+class EventEmitter {
+    private events: { [key: string]: Function[] } = {};
+
+    on(event: string, callback: Function): void {
+        if (!this.events[event]) {
+            this.events[event] = [];
+        }
+        this.events[event].push(callback);
+    }
+
+    off(event: string, callback: Function): void {
+        if (!this.events[event]) return;
+        this.events[event] = this.events[event].filter(cb => cb !== callback);
+    }
+
+    emit(event: string, ...args: any[]): void {
+        if (!this.events[event]) return;
+        this.events[event].forEach(callback => {
+            try {
+                callback(...args);
+            } catch (error) {
+                console.error(`Event callback error for '${event}':`, error);
+            }
+        });
+    }
+}
 
 /**
  * LLM Credit SDK - Main class for token usage tracking and credit estimation
  */
 export class LLMCreditSDK {
     private config: SDKConfig;
+    private eventEmitter: EventEmitter;
+    private dashboardClient: DashboardClient | null = null;
+    private dashboardSyncEnabled = false;
 
     /**
      * Initialize the SDK with optional custom configuration
@@ -25,6 +61,12 @@ export class LLMCreditSDK {
     constructor(customConfig?: Partial<SDKConfig>) {
         // Deep merge custom config with defaults
         this.config = this.mergeConfigs(DEFAULT_CONFIG, customConfig || {});
+        this.eventEmitter = new EventEmitter();
+
+        // Listen for config updates
+        this.eventEmitter.on('configUpdated', (newConfig: SDKConfig) => {
+            this.config = newConfig;
+        });
     }
 
     /**
@@ -152,6 +194,21 @@ export class LLMCreditSDK {
             actualCompletionTokens
         });
 
+        // Post reconciliation data to dashboard (if enabled)
+        // This is non-blocking and won't affect the response
+        this.postReconciliationToDashboard({
+            model,
+            feature,
+            promptTokens,
+            completionTokens,
+            actualPromptTokens,
+            actualCompletionTokens,
+            reconciliation
+        }).catch(error => {
+            // Error already logged in postReconciliationToDashboard
+            // This catch prevents unhandled promise rejection
+        });
+
         return {
             response,
             reconciliation
@@ -251,5 +308,97 @@ export class LLMCreditSDK {
      */
     getCreditPerDollar(): number {
         return this.config.credit_per_dollar;
+    }
+
+    /**
+     * Enable dashboard synchronization
+     * @param config - Dashboard sync configuration
+     */
+    enableDashboardSync(config: DashboardSyncConfig): void {
+        try {
+            this.dashboardClient = new DashboardClient(config);
+            this.dashboardSyncEnabled = true;
+
+            // Subscribe to config updates from dashboard
+            this.dashboardClient.subscribeToConfigUpdates((newConfig: SDKConfig) => {
+                this.eventEmitter.emit('configUpdated', newConfig);
+            });
+
+            console.log('[LLMCreditSDK] Dashboard sync enabled');
+        } catch (error) {
+            console.error('[LLMCreditSDK] Failed to enable dashboard sync:', error);
+            this.dashboardSyncEnabled = false;
+        }
+    }
+
+    /**
+     * Disable dashboard synchronization
+     */
+    disableDashboardSync(): void {
+        if (this.dashboardClient) {
+            this.dashboardClient.unsubscribe();
+            this.dashboardClient = null;
+        }
+        this.dashboardSyncEnabled = false;
+        console.log('[LLMCreditSDK] Dashboard sync disabled');
+    }
+
+    /**
+     * Check if dashboard sync is enabled
+     * @returns True if dashboard sync is enabled
+     */
+    isDashboardSyncEnabled(): boolean {
+        return this.dashboardSyncEnabled;
+    }
+
+    /**
+     * Get current dashboard configuration
+     * @returns Dashboard config if enabled, null otherwise
+     */
+    getDashboardConfig(): DashboardSyncConfig | null {
+        return this.dashboardClient?.['config'] || null;
+    }
+
+    /**
+     * Post reconciliation data to dashboard (if sync is enabled)
+     * This method is called internally but can also be used manually
+     */
+    private async postReconciliationToDashboard(reconciliationData: {
+        model: string;
+        feature: string;
+        promptTokens: number;
+        completionTokens: number;
+        actualPromptTokens: number;
+        actualCompletionTokens: number;
+        reconciliation: ReconcileResult;
+    }): Promise<void> {
+        if (!this.dashboardSyncEnabled || !this.dashboardClient) {
+            return; // Silently skip if sync is disabled
+        }
+
+        try {
+            const log: ReconciliationLog = {
+                model: reconciliationData.model,
+                feature: reconciliationData.feature,
+                promptTokens: reconciliationData.promptTokens,
+                completionTokens: reconciliationData.completionTokens,
+                actualPromptTokens: reconciliationData.actualPromptTokens,
+                actualCompletionTokens: reconciliationData.actualCompletionTokens,
+                estimatedCredits: reconciliationData.reconciliation.estimatedCredits,
+                actualTokensUsed: reconciliationData.reconciliation.actualTokensUsed,
+                actualCost: reconciliationData.reconciliation.actualCost,
+                estimatedVsActualCreditDelta: reconciliationData.reconciliation.estimatedVsActualCreditDelta,
+                costDelta: reconciliationData.reconciliation.costDelta,
+                marginDelta: reconciliationData.reconciliation.marginDelta,
+                creditPerDollar: this.getCreditPerDollar(),
+                timestamp: new Date().toISOString()
+            };
+
+            // Non-blocking call - errors are handled internally by DashboardClient
+            await this.dashboardClient.postReconciliation(log);
+        } catch (error) {
+            // Log error but don't throw - maintain non-blocking behavior
+            console.error('[LLMCreditSDK] Failed to post reconciliation to dashboard:', error);
+        }
     }
 } 
