@@ -62,7 +62,49 @@ export interface ReconcileResult {
     estimatedCredits: number;
     actualTokensUsed: number;
     actualCost: number;
-    estimatedVsActualDelta: number;
+    estimatedVsActualCreditDelta: number;
+    costDelta: number;
+    marginDelta: number;
+}
+
+/**
+ * Standard token usage information extracted from LLM responses
+ */
+export interface TokenUsage {
+    promptTokens: number;
+    completionTokens: number;
+}
+
+/**
+ * Interface for token extractors that can parse different LLM provider responses
+ * to extract actual token usage information.
+ * 
+ * This interface allows for building a library of standardized extractors
+ * for different LLM providers (OpenAI, Anthropic, Together AI, etc.)
+ */
+export interface TokenExtractor<TResponse = any> {
+    /**
+     * Extract token usage from the LLM response
+     * @param response - The response object from the LLM provider
+     * @returns Token usage information
+     */
+    extract(response: TResponse): TokenUsage;
+
+    /**
+     * Name of the LLM provider this extractor is designed for
+     * (e.g., 'openai', 'anthropic', 'together', 'cohere')
+     */
+    readonly providerName: string;
+
+    /**
+     * Optional description of what response format this extractor expects
+     */
+    readonly description?: string;
+
+    /**
+     * Optional version or API version this extractor is compatible with
+     */
+    readonly apiVersion?: string;
 }
 
 /**
@@ -74,7 +116,11 @@ export interface WrapCallInput<T = any> {
     promptTokens: number;
     completionTokens: number;
     callFunction: () => Promise<T>;
-    extractActualTokens?: (response: T) => { promptTokens: number; completionTokens: number };
+    /**
+     * Token extractor instance that implements the TokenExtractor interface.
+     * Extracts actual token usage from the LLM response for accurate reconciliation.
+     */
+    tokenExtractor?: TokenExtractor<T>;
 }
 
 /**
