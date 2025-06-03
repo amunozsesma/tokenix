@@ -1,26 +1,68 @@
 {
-    "name": "llm-credit-sdk",
-    "version": "1.0.0",
-    "description": "SDK for tracking AI token usage and credit estimation",
+    "name": "@amunozsesma/llm-credit-sdk",
+    "version": "0.1.0",
+    "description": "SDK for estimating and reconciling LLM token costs using a credit system.",
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js",
+            "require": "./dist/index.js"
+        },
+        "./extractors": {
+            "types": "./dist/extractors/index.d.ts",
+            "import": "./dist/extractors/index.js",
+            "require": "./dist/extractors/index.js"
+        }
+    },
+    "files": [
+        "dist/**/*",
+        "README.md",
+        "LICENSE"
+    ],
     "scripts": {
         "build": "tsc",
         "dev": "tsc --watch",
-        "example": "ts-node example.ts"
+        "example": "ts-node example.ts",
+        "test": "jest",
+        "test:watch": "jest --watch",
+        "test:coverage": "jest --coverage",
+        "lint": "tsc --noEmit",
+        "prepublishOnly": "npm run lint && npm test && npm run build",
+        "postinstall": "echo '\n🚀 Thanks for installing @tokenix/llm-credit-sdk!\n📖 Quick start: https://github.com/amunozsesma/tokenix#quick-start\n📚 Docs: https://github.com/amunozsesma/tokenix/tree/main/docs\n💡 Examples: https://github.com/amunozsesma/tokenix/tree/main/examples\n'"
     },
     "keywords": [
         "ai",
-        "llm",
+        "sdk",
+        "credit",
         "tokens",
-        "credits",
         "billing",
-        "usage"
+        "llm",
+        "openai",
+        "anthropic",
+        "usage-tracking",
+        "cost-estimation",
+        "typescript"
     ],
-    "author": "",
+    "author": "amunozsesma@gmail.com",
     "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/amunozsesma/tokenix.git"
+    },
+    "bugs": {
+        "url": "https://github.com/amunozsesma/tokenix/issues"
+    },
+    "homepage": "https://github.com/amunozsesma/tokenix#readme",
+    "engines": {
+        "node": ">=16.0.0"
+    },
     "devDependencies": {
         "@types/node": "^20.0.0",
+        "@types/jest": "^29.5.0",
+        "jest": "^29.7.0",
+        "ts-jest": "^29.1.0",
         "typescript": "^5.0.0",
         "ts-node": "^10.9.0"
     },
