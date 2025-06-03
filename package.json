@@ -1,0 +1,28 @@
+{
+    "name": "llm-credit-sdk",
+    "version": "1.0.0",
+    "description": "SDK for tracking AI token usage and credit estimation",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "scripts": {
+        "build": "tsc",
+        "dev": "tsc --watch",
+        "example": "ts-node example.ts"
+    },
+    "keywords": [
+        "ai",
+        "llm",
+        "tokens",
+        "credits",
+        "billing",
+        "usage"
+    ],
+    "author": "",
+    "license": "MIT",
+    "devDependencies": {
+        "@types/node": "^20.0.0",
+        "typescript": "^5.0.0",
+        "ts-node": "^10.9.0"
+    },
+    "dependencies": {}
+}
