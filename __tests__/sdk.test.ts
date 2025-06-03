@@ -603,4 +603,195 @@ describe('LLMCreditSDK', () => {
             expect(openAIChatExtractor.apiVersion).toBe('v1');
         });
     });
+
+    describe('Dashboard Integration', () => {
+        beforeEach(() => {
+            // Mock fetch for dashboard client
+            global.fetch = jest.fn();
+
+            // Mock WebSocket and EventSource
+            (global as any).WebSocket = jest.fn().mockImplementation(() => ({
+                onopen: null,
+                onmessage: null,
+                onerror: null,
+                onclose: null,
+                readyState: 0,
+                close: jest.fn()
+            }));
+
+            (global as any).EventSource = jest.fn().mockImplementation(() => ({
+                onopen: null,
+                onmessage: null,
+                onerror: null,
+                readyState: 0,
+                close: jest.fn()
+            }));
+
+            // Mock console methods
+            jest.spyOn(console, 'log').mockImplementation();
+            jest.spyOn(console, 'error').mockImplementation();
+        });
+
+        afterEach(() => {
+            sdk.disableDashboardSync();
+            jest.restoreAllMocks();
+        });
+
+        it('should enable dashboard sync', () => {
+            const config = {
+                apiKey: 'test-api-key',
+                endpoint: 'https://api.tokenix.com',
+                projectId: 'test-project'
+            };
+
+            sdk.enableDashboardSync(config);
+
+            expect(sdk.isDashboardSyncEnabled()).toBe(true);
+            expect(console.log).toHaveBeenCalledWith('[LLMCreditSDK] Dashboard sync enabled');
+        });
+
+        it('should disable dashboard sync', () => {
+            const config = {
+                apiKey: 'test-api-key',
+                endpoint: 'https://api.tokenix.com'
+            };
+
+            sdk.enableDashboardSync(config);
+            expect(sdk.isDashboardSyncEnabled()).toBe(true);
+
+            sdk.disableDashboardSync();
+            expect(sdk.isDashboardSyncEnabled()).toBe(false);
+            expect(console.log).toHaveBeenCalledWith('[LLMCreditSDK] Dashboard sync disabled');
+        });
+
+        it('should handle dashboard sync errors gracefully', () => {
+            // Mock DashboardClient constructor to throw
+            jest.spyOn(require('../src/dashboardClient'), 'DashboardClient').mockImplementationOnce(() => {
+                throw new Error('Dashboard connection failed');
+            });
+
+            const config = {
+                apiKey: 'test-api-key',
+                endpoint: 'https://api.tokenix.com'
+            };
+
+            sdk.enableDashboardSync(config);
+
+            expect(sdk.isDashboardSyncEnabled()).toBe(false);
+            expect(console.error).toHaveBeenCalledWith(
+                '[LLMCreditSDK] Failed to enable dashboard sync:',
+                expect.any(Error)
+            );
+        });
+
+        it('should post reconciliation data when sync is enabled', async () => {
+            const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>;
+            mockFetch.mockResolvedValueOnce({
+                ok: true,
+                status: 200,
+                statusText: 'OK'
+            } as Response);
+
+            const config = {
+                apiKey: 'test-api-key',
+                endpoint: 'https://api.tokenix.com',
+                projectId: 'test-project'
+            };
+
+            sdk.enableDashboardSync(config);
+
+            const mockResponse = { text: 'Hello, world!' };
+            const mockCallFunction = jest.fn().mockResolvedValue(mockResponse);
+
+            await sdk.wrapCall({
+                model: 'openai:gpt-4',
+                feature: 'chat',
+                promptTokens: 100,
+                completionTokens: 200,
+                callFunction: mockCallFunction
+            });
+
+            // Wait for async postReconciliation call
+            await new Promise(resolve => setTimeout(resolve, 10));
+
+            expect(mockFetch).toHaveBeenCalledWith(
+                'https://api.tokenix.com/api/v1/reconciliation-log',
+                expect.objectContaining({
+                    method: 'POST',
+                    headers: expect.objectContaining({
+                        'Authorization': 'Bearer test-api-key'
+                    }),
+                    body: expect.stringContaining('openai:gpt-4')
+                })
+            );
+        });
+
+        it('should not make request when sync is disabled', async () => {
+            const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>;
+
+            const mockResponse = { text: 'Hello, world!' };
+            const mockCallFunction = jest.fn().mockResolvedValue(mockResponse);
+
+            await sdk.wrapCall({
+                model: 'openai:gpt-4',
+                feature: 'chat',
+                promptTokens: 100,
+                completionTokens: 200,
+                callFunction: mockCallFunction
+            });
+
+            expect(mockFetch).not.toHaveBeenCalled();
+        });
+
+        it('should handle config updates from dashboard', () => {
+            const config = {
+                apiKey: 'test-api-key',
+                endpoint: 'https://api.tokenix.com'
+            };
+
+            const originalConfig = sdk.getConfig();
+            sdk.enableDashboardSync(config);
+
+            // Simulate config update
+            const newConfig = {
+                ...originalConfig,
+                default_margin: 3.0,
+                credit_per_dollar: 500
+            };
+
+            // Trigger config update event
+            (sdk as any).eventEmitter.emit('configUpdated', newConfig);
+
+            const updatedConfig = sdk.getConfig();
+            expect(updatedConfig.default_margin).toBe(3.0);
+            expect(updatedConfig.credit_per_dollar).toBe(500);
+        });
+
+        it('should handle dashboard client errors gracefully during reconciliation', async () => {
+            const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>;
+            mockFetch.mockRejectedValueOnce(new Error('Network error'));
+
+            const config = {
+                apiKey: 'test-api-key',
+                endpoint: 'https://api.tokenix.com'
+            };
+
+            sdk.enableDashboardSync(config);
+
+            const mockResponse = { text: 'Hello, world!' };
+            const mockCallFunction = jest.fn().mockResolvedValue(mockResponse);
+
+            // This should not throw even though dashboard sync fails
+            const result = await sdk.wrapCall({
+                model: 'openai:gpt-4',
+                feature: 'chat',
+                promptTokens: 100,
+                completionTokens: 200,
+                callFunction: mockCallFunction
+            });
+
+            expect(result.response).toBe(mockResponse);
+            expect(mockCallFunction).toHaveBeenCalledTimes(1);
+        });
+    });
 }); 

@@ -130,4 +130,34 @@ export interface WrapCallInput<T = any> {
 export interface WrapCallResult<T = any> {
     response: T;
     reconciliation: ReconcileResult;
+}
+
+/**
+ * Configuration for dashboard synchronization
+ */
+export interface DashboardSyncConfig {
+    apiKey: string;
+    endpoint: string;
+    projectId?: string;
+}
+
+/**
+ * Payload for posting reconciliation logs to dashboard
+ */
+export interface ReconciliationLog {
+    projectId?: string;
+    model: string;
+    feature: string;
+    promptTokens: number;
+    completionTokens: number;
+    actualPromptTokens: number;
+    actualCompletionTokens: number;
+    estimatedCredits: number;
+    actualTokensUsed: number;
+    actualCost: number;
+    estimatedVsActualCreditDelta: number;
+    costDelta: number;
+    marginDelta: number;
+    creditPerDollar: number;
+    timestamp: string;
 } 
