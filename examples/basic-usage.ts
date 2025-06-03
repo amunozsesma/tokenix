@@ -25,6 +25,7 @@ async function basicUsageExample() {
         completionTokens: 350
     });
     console.log(`Estimated credits: ${estimate.estimatedCredits}`);
+    console.log(`Credit per dollar rate: ${sdk.getCreditPerDollar()}`);
     console.log();
 
     // Example 2: Usage Reconciliation
@@ -118,6 +119,35 @@ async function basicUsageExample() {
 
     console.log('\n✅ Basic usage example completed!');
     console.log('📖 For more examples, see: https://github.com/amunozsesma/tokenix/tree/main/examples');
+
+    // Example 5: Credit Per Dollar Comparison
+    console.log('\n💰 Example 5: Credit Per Dollar Rate Comparison');
+
+    // Default SDK (1000 credits per dollar)
+    const defaultSDK = new LLMCreditSDK();
+    const defaultEstimate = defaultSDK.estimateCredits({
+        model: 'openai:gpt-4',
+        feature: 'chat',
+        promptTokens: 100,
+        completionTokens: 200
+    });
+
+    // Custom SDK with different credit rate (500 credits per dollar)
+    const customSDK = new LLMCreditSDK({
+        credit_per_dollar: 500
+    });
+    const customEstimate = customSDK.estimateCredits({
+        model: 'openai:gpt-4',
+        feature: 'chat',
+        promptTokens: 100,
+        completionTokens: 200
+    });
+
+    console.log(`Default rate (${defaultSDK.getCreditPerDollar()} credits/$): ${defaultEstimate.estimatedCredits} credits`);
+    console.log(`Custom rate (${customSDK.getCreditPerDollar()} credits/$): ${customEstimate.estimatedCredits} credits`);
+    console.log(`Ratio: ${(defaultEstimate.estimatedCredits / customEstimate.estimatedCredits).toFixed(2)}x`);
+
+    console.log('\n✅ Basic usage example completed!');
 }
 
 // Run the example

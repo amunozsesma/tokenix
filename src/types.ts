@@ -3,6 +3,7 @@
  */
 export interface SDKConfig {
     default_margin: number;
+    credit_per_dollar: number;
     models: {
         [modelName: string]: ModelConfig;
     };
