@@ -20,7 +20,9 @@ async function main() {
         promptTokens: 150,
         completionTokens: 350
     });
-    console.log(`Estimated credits: ${estimate.estimatedCredits}\n`);
+    console.log(`Estimated credits: ${estimate.estimatedCredits}`);
+    console.log(`Credit per dollar rate: ${sdk.getCreditPerDollar()}`);
+    console.log();
 
     // Example 2: Reconciliation with actual usage
     console.log('Example 2: Usage Reconciliation');
@@ -36,7 +38,9 @@ async function main() {
         estimatedCredits: reconciliation.estimatedCredits,
         actualTokensUsed: reconciliation.actualTokensUsed,
         actualCost: reconciliation.actualCost,
-        estimatedVsActualCreditDelta: reconciliation.estimatedVsActualCreditDelta
+        estimatedVsActualCreditDelta: reconciliation.estimatedVsActualCreditDelta,
+        costDelta: reconciliation.costDelta,
+        marginDelta: reconciliation.marginDelta
     });
     console.log();
 
@@ -64,6 +68,7 @@ async function main() {
     console.log('Example 4: Custom Configuration');
     const customSDK = createSDK({
         default_margin: 2.0, // Higher default margin
+        credit_per_dollar: 500, // Different credit conversion rate (500 credits per dollar instead of 1000)
         models: {
             'custom:my-model': {
                 prompt_cost_per_1k: 0.005,
@@ -81,7 +86,9 @@ async function main() {
         promptTokens: 100,
         completionTokens: 200
     });
-    console.log(`Custom model estimate: ${customEstimate.estimatedCredits} credits\n`);
+    console.log(`Custom model estimate: ${customEstimate.estimatedCredits} credits`);
+    console.log(`Custom credit per dollar rate: ${customSDK.getCreditPerDollar()}`);
+    console.log();
 
     // Example 5: Wrapped LLM call simulation
     console.log('🌯 Example 5: Wrapped LLM Call with OpenAI Extractor');
@@ -130,7 +137,9 @@ async function main() {
         estimatedCredits: wrappedResult.reconciliation.estimatedCredits,
         actualTokensUsed: wrappedResult.reconciliation.actualTokensUsed,
         actualCost: wrappedResult.reconciliation.actualCost,
-        delta: wrappedResult.reconciliation.estimatedVsActualCreditDelta
+        delta: wrappedResult.reconciliation.estimatedVsActualCreditDelta,
+        costDelta: wrappedResult.reconciliation.costDelta,
+        marginDelta: wrappedResult.reconciliation.marginDelta
     });
     console.log();
 
@@ -176,13 +185,17 @@ async function main() {
     const completionCost = (completionTokens / 1000) * modelConfig.completion_cost_per_1k;
     const baseCost = promptCost + completionCost;
     const margin = modelConfig.features?.chat?.margin || sdk.getConfig().default_margin;
-    const finalCredits = baseCost * margin;
+    const costWithMargin = baseCost * margin;
+    const creditPerDollar = sdk.getCreditPerDollar();
+    const finalCredits = costWithMargin * creditPerDollar;
 
     console.log('Cost breakdown for GPT-4 chat:');
     console.log(`  Prompt tokens: ${promptTokens} × $${modelConfig.prompt_cost_per_1k}/1k = $${promptCost.toFixed(6)}`);
     console.log(`  Completion tokens: ${completionTokens} × $${modelConfig.completion_cost_per_1k}/1k = $${completionCost.toFixed(6)}`);
     console.log(`  Base cost: $${baseCost.toFixed(6)}`);
     console.log(`  Margin: ${margin}x`);
+    console.log(`  Cost with margin: $${costWithMargin.toFixed(6)}`);
+    console.log(`  Credit per dollar rate: ${creditPerDollar}`);
     console.log(`  Final credits: ${finalCredits.toFixed(6)}`);
 
     console.log('\n✅ Example completed successfully!');

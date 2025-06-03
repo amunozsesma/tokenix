@@ -6,6 +6,7 @@ import { SDKConfig } from './types';
  */
 export const DEFAULT_CONFIG: SDKConfig = {
     default_margin: 1.5,
+    credit_per_dollar: 1000,
     models: {
         // OpenAI Models
         'openai:gpt-4': {

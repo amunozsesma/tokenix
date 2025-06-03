@@ -76,7 +76,8 @@ describe('LLMCreditSDK', () => {
             // Completion: (350/1000) * 0.06 = 0.021
             // Base cost: 0.0255
             // With 2.0 margin: 0.051
-            expect(result.estimatedCredits).toBe(0.051);
+            // With 1000 credit_per_dollar: 51
+            expect(result.estimatedCredits).toBe(51);
         });
 
         it('should use feature-specific margin when available', () => {
@@ -106,9 +107,9 @@ describe('LLMCreditSDK', () => {
                 completionTokens: 200
             });
 
-            // Should use default margin of 1.5
+            // Should use default margin of 1.5 and credit_per_dollar of 1000
             const baseCost = (100 / 1000) * 0.03 + (200 / 1000) * 0.06;
-            const expectedCredits = baseCost * 1.5;
+            const expectedCredits = baseCost * 1.5 * 1000; // Include credit_per_dollar conversion
             expect(result.estimatedCredits).toBe(Number(expectedCredits.toFixed(6)));
         });
 
@@ -165,10 +166,10 @@ describe('LLMCreditSDK', () => {
                 actualCompletionTokens: 340
             });
 
-            expect(result.estimatedCredits).toBe(0.051); // Same as estimate
+            expect(result.estimatedCredits).toBe(51); // Same as estimate (with credit_per_dollar conversion)
             expect(result.actualTokensUsed).toBe(500); // 160 + 340
             expect(result.actualCost).toBe(0.0252); // (160/1000)*0.03 + (340/1000)*0.06
-            expect(result.estimatedVsActualCreditDelta).toBe(-0.0006); // Actual was slightly less
+            expect(result.estimatedVsActualCreditDelta).toBe(-0.6); // Actual was slightly less (in credits)
         });
 
         it('should show positive delta when underestimated', () => {

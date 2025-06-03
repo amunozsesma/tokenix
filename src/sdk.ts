@@ -46,8 +46,11 @@ export class LLMCreditSDK {
         // Get margin for this feature or use default
         const margin = this.getMarginForFeature(modelConfig, feature);
 
-        // Calculate estimated credits
-        const estimatedCredits = baseCost * margin;
+        // Calculate cost with margin in dollars
+        const costWithMargin = baseCost * margin;
+
+        // Convert dollars to credits using credit_per_dollar rate
+        const estimatedCredits = costWithMargin * this.config.credit_per_dollar;
 
         return {
             estimatedCredits: Number(estimatedCredits.toFixed(6))
@@ -91,7 +94,8 @@ export class LLMCreditSDK {
 
         // Get margin and calculate actual credits
         const margin = this.getMarginForFeature(modelConfig, feature);
-        const actualCredits = actualCost * margin;
+        const actualCostWithMargin = actualCost * margin;
+        const actualCredits = actualCostWithMargin * this.config.credit_per_dollar;
 
         // Calculate deltas
         const estimatedVsActualCreditDelta = actualCredits - estimated.estimatedCredits;
@@ -188,6 +192,7 @@ export class LLMCreditSDK {
     private mergeConfigs(defaultConfig: SDKConfig, customConfig: Partial<SDKConfig>): SDKConfig {
         const result: SDKConfig = {
             default_margin: customConfig.default_margin ?? defaultConfig.default_margin,
+            credit_per_dollar: customConfig.credit_per_dollar ?? defaultConfig.credit_per_dollar,
             models: { ...defaultConfig.models }
         };
 
@@ -238,5 +243,13 @@ export class LLMCreditSDK {
     getAvailableFeatures(model: string): string[] {
         const modelConfig = this.getModelConfig(model);
         return Object.keys(modelConfig.features || {});
+    }
+
+    /**
+     * Get the current credit per dollar conversion rate
+     * @returns Credit per dollar rate
+     */
+    getCreditPerDollar(): number {
+        return this.config.credit_per_dollar;
     }
 } 

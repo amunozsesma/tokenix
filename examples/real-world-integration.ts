@@ -33,6 +33,7 @@ class AIAppService {
         // Initialize SDK with custom configuration for your business
         this.sdk = new LLMCreditSDK({
             default_margin: 2.5, // 150% markup for sustainability
+            credit_per_dollar: 1000, // 1000 credits per dollar (10 credits = 1 cent)
             models: {
                 'openai:gpt-4': {
                     prompt_cost_per_1k: 0.03,
@@ -113,6 +114,27 @@ class AIAppService {
         });
 
         const remainingCredits = await this.billing.getUserCredits(userId);
+
+        // Log the complete transaction for analytics
+        const logEntry = {
+            timestamp: new Date().toISOString(),
+            userId,
+            requestId: '',
+            model: 'openai:gpt-4',
+            feature,
+            promptTokens: estimatedPromptTokens,
+            completionTokens: estimatedCompletionTokens,
+            estimatedCredits: result.reconciliation.estimatedCredits,
+            actualTokensUsed: result.reconciliation.actualTokensUsed,
+            actualCost: result.reconciliation.actualCost,
+            estimatedVsActualCreditDelta: result.reconciliation.estimatedVsActualCreditDelta,
+            costDelta: result.reconciliation.costDelta,
+            marginDelta: result.reconciliation.marginDelta,
+            creditPerDollar: this.sdk.getCreditPerDollar(),
+            creditsCharged: result.reconciliation.estimatedCredits, // What we actually charged
+            userBalance: 0, // Assuming userBalance is not provided in the original code
+            success: true
+        };
 
         return {
             response: result.response.choices[0].message.content,
