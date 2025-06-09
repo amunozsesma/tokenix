@@ -1,6 +1,6 @@
 {
-    "name": "@amunozsesma/llm-credit-sdk",
-    "version": "0.1.0",
+    "name": "llm-credit-sdk",
+    "version": "1.0.0",
     "description": "SDK for estimating and reconciling LLM token costs using a credit system.",
     "main": "dist/index.js",
     "types": "dist/index.d.ts",

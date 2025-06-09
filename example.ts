@@ -1,4 +1,4 @@
-import { LLMCreditSDK, createSDK, DEFAULT_CONFIG, TokenExtractor, openAIChatExtractor, OpenAIChatCompletionResponse } from './src/index';
+import { LLMCreditSDK, createSDK, openAIChatExtractor, OpenAIChatCompletionResponse } from './src/index';
 
 /**
  * Example usage of the LLM Credit SDK
