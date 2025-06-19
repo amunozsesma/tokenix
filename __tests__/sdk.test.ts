@@ -647,7 +647,7 @@ describe('LLMCreditSDK', () => {
             sdk.enableDashboardSync(config);
 
             expect(sdk.isDashboardSyncEnabled()).toBe(true);
-            expect(console.log).toHaveBeenCalledWith('[LLMCreditSDK] Dashboard sync enabled');
+            expect(console.log).toHaveBeenCalledWith('[LLMCreditSDK] Dashboard sync enabled with endpoint: https://api.tokenix.com');
         });
 
         it('should disable dashboard sync', () => {
