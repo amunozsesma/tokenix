@@ -136,8 +136,8 @@ export interface WrapCallResult<T = any> {
  * Configuration for dashboard synchronization
  */
 export interface DashboardSyncConfig {
-    apiKey: string;
-    endpoint: string;
+    apiKey?: string;
+    endpoint?: string;
     projectId?: string;
 }
 

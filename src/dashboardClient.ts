@@ -2,29 +2,6 @@ import { DashboardSyncConfig, ReconciliationLog, SDKConfig } from './types';
 
 // Type declarations for browser APIs
 declare global {
-    interface CloseEvent extends Event {
-        readonly code: number;
-        readonly reason: string;
-        readonly wasClean: boolean;
-    }
-
-    const WebSocket: {
-        new(url: string, protocols?: string[], options?: any): WebSocket;
-        readonly CONNECTING: number;
-        readonly OPEN: number;
-        readonly CLOSING: number;
-        readonly CLOSED: number;
-    };
-
-    interface WebSocket extends EventTarget {
-        readonly readyState: number;
-        onopen: ((event: Event) => void) | null;
-        onmessage: ((event: MessageEvent) => void) | null;
-        onerror: ((event: Event) => void) | null;
-        onclose: ((event: CloseEvent) => void) | null;
-        close(): void;
-    }
-
     const EventSource: {
         new(url: string, eventSourceInitDict?: any): EventSource;
         readonly CONNECTING: number;
@@ -47,12 +24,32 @@ declare global {
  */
 export class DashboardClient {
     private config: DashboardSyncConfig;
-    private configSubscription: WebSocket | EventSource | null = null;
+    private configSubscription: EventSource | null = null;
     private pollingInterval: NodeJS.Timeout | null = null;
     private isSubscribed = false;
 
     constructor(config: DashboardSyncConfig) {
-        this.config = config;
+        this.config = this.validateAndNormalizeConfig(config);
+    }
+
+    /**
+     * Validate and normalize the dashboard configuration
+     */
+    private validateAndNormalizeConfig(config: DashboardSyncConfig): DashboardSyncConfig {
+        if (!config.endpoint) {
+            throw new Error('Dashboard endpoint is required');
+        }
+
+        // Ensure endpoint doesn't end with slash
+        const normalizedEndpoint = config.endpoint.replace(/\/$/, '');
+
+        // Log the endpoint being used for debugging
+        this.logInfo(`Initializing with endpoint: ${normalizedEndpoint}`);
+
+        return {
+            ...config,
+            endpoint: normalizedEndpoint
+        };
     }
 
     /**
@@ -60,6 +57,10 @@ export class DashboardClient {
      * Includes retry logic and graceful error handling
      */
     async postReconciliation(log: ReconciliationLog): Promise<void> {
+        if (!this.config.endpoint) {
+            throw new Error('Dashboard endpoint not configured');
+        }
+
         const url = `${this.config.endpoint}/api/v1/reconciliation-log`;
         const payload = {
             ...log,
@@ -75,26 +76,32 @@ export class DashboardClient {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${this.config.apiKey}`
+                        'Authorization': `Bearer ${this.config.apiKey}`,
+                        'Accept': 'application/json'
                     },
                     body: JSON.stringify(payload),
-                    signal: controller.signal
+                    signal: controller.signal,
+                    mode: 'cors' // Explicitly enable CORS
                 });
 
                 clearTimeout(timeoutId);
 
                 if (!response.ok) {
-                    throw new Error(`Dashboard API error: ${response.status} ${response.statusText}`);
+                    const errorText = await response.text().catch(() => 'Unknown error');
+                    throw new Error(`Dashboard API error: ${response.status} ${response.statusText} - ${errorText}`);
                 }
             } catch (error) {
                 clearTimeout(timeoutId);
+                if (error instanceof Error && error.name === 'AbortError') {
+                    throw new Error('Request timeout - check if dashboard endpoint is reachable');
+                }
                 throw error;
             }
         });
     }
 
     /**
-     * Subscribe to real-time config updates via WebSocket/SSE
+     * Subscribe to real-time config updates via SSE
      * Falls back to polling if subscription fails
      */
     subscribeToConfigUpdates(onUpdate: (config: SDKConfig) => void): void {
@@ -104,15 +111,11 @@ export class DashboardClient {
 
         this.isSubscribed = true;
 
-        // Try WebSocket first
-        this.tryWebSocketSubscription(onUpdate)
+        // Try Server-Sent Events first
+        this.trySSESubscription(onUpdate)
             .catch(() => {
-                // Fallback to Server-Sent Events
-                this.trySSESubscription(onUpdate)
-                    .catch(() => {
-                        // Final fallback to polling
-                        this.startPolling(onUpdate);
-                    });
+                // Fallback to polling
+                this.startPolling(onUpdate);
             });
     }
 
@@ -139,6 +142,10 @@ export class DashboardClient {
      * Get current config from dashboard (used for polling fallback)
      */
     async getConfig(): Promise<SDKConfig> {
+        if (!this.config.endpoint) {
+            throw new Error('Dashboard endpoint not configured');
+        }
+
         const url = `${this.config.endpoint}/api/v1/config`;
 
         return await this.retryRequest(async () => {
@@ -148,91 +155,33 @@ export class DashboardClient {
             try {
                 const response = await fetch(url, {
                     headers: {
-                        'Authorization': `Bearer ${this.config.apiKey}`
+                        'Authorization': `Bearer ${this.config.apiKey}`,
+                        'Accept': 'application/json'
                     },
-                    signal: controller.signal
+                    signal: controller.signal,
+                    mode: 'cors' // Explicitly enable CORS
                 });
 
                 clearTimeout(timeoutId);
 
                 if (!response.ok) {
-                    throw new Error(`Dashboard API error: ${response.status} ${response.statusText}`);
+                    const errorText = await response.text().catch(() => 'Unknown error');
+                    throw new Error(`Dashboard API error: ${response.status} ${response.statusText} - ${errorText}. Check endpoint: ${url}`);
                 }
 
                 const config = await response.json() as SDKConfig;
                 return config;
             } catch (error) {
                 clearTimeout(timeoutId);
+                if (error instanceof Error && error.name === 'AbortError') {
+                    throw new Error('Request timeout - check if dashboard endpoint is reachable');
+                }
                 throw error;
             }
         });
     }
 
-    /**
-     * Try WebSocket subscription for real-time updates
-     */
-    private async tryWebSocketSubscription(onUpdate: (config: SDKConfig) => void): Promise<void> {
-        return new Promise((resolve, reject) => {
-            try {
-                if (typeof WebSocket === 'undefined') {
-                    reject(new Error('WebSocket not available'));
-                    return;
-                }
 
-                const wsUrl = this.config.endpoint.replace(/^https?/, 'wss') + '/api/v1/config/subscribe';
-                const ws = new WebSocket(wsUrl, [], {
-                    headers: {
-                        'Authorization': `Bearer ${this.config.apiKey}`
-                    }
-                });
-
-                ws.onopen = () => {
-                    this.configSubscription = ws;
-                    this.logInfo('WebSocket subscription established');
-                    resolve();
-                };
-
-                ws.onmessage = (event: MessageEvent) => {
-                    try {
-                        const config = JSON.parse(event.data) as SDKConfig;
-                        onUpdate(config);
-                    } catch (error) {
-                        this.logError('Failed to parse WebSocket config update', error);
-                    }
-                };
-
-                ws.onerror = (error: Event) => {
-                    this.logError('WebSocket error', error);
-                    reject(new Error('WebSocket connection failed'));
-                };
-
-                ws.onclose = () => {
-                    if (this.isSubscribed) {
-                        this.logInfo('WebSocket connection closed, attempting to reconnect...');
-                        // Attempt to reconnect after a delay
-                        setTimeout(() => {
-                            if (this.isSubscribed) {
-                                this.tryWebSocketSubscription(onUpdate).catch(() => {
-                                    this.startPolling(onUpdate);
-                                });
-                            }
-                        }, 5000);
-                    }
-                };
-
-                // Timeout for connection
-                setTimeout(() => {
-                    if (ws.readyState === WebSocket.CONNECTING) {
-                        ws.close();
-                        reject(new Error('WebSocket connection timeout'));
-                    }
-                }, 10000);
-
-            } catch (error) {
-                reject(error);
-            }
-        });
-    }
 
     /**
      * Try Server-Sent Events subscription for real-time updates
@@ -261,6 +210,7 @@ export class DashboardClient {
                 eventSource.onmessage = (event: MessageEvent) => {
                     try {
                         const config = JSON.parse(event.data) as SDKConfig;
+                        this.logInfo(`SSE config update received`);
                         onUpdate(config);
                     } catch (error) {
                         this.logError('Failed to parse SSE config update', error);
