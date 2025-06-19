@@ -65,6 +65,7 @@ export class LLMCreditSDK {
 
         // Listen for config updates
         this.eventEmitter.on('configUpdated', (newConfig: SDKConfig) => {
+            console.log('[LLMCreditSDK] Config updated', newConfig);
             this.config = newConfig;
         });
     }
