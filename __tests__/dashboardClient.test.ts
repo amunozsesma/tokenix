@@ -4,27 +4,7 @@ import { DashboardSyncConfig, ReconciliationLog, SDKConfig } from '../src/types'
 // Mock fetch globally
 global.fetch = jest.fn();
 
-// Mock WebSocket and EventSource with proper typing
-(global as any).WebSocket = jest.fn().mockImplementation(() => ({
-    onopen: null,
-    onmessage: null,
-    onerror: null,
-    onclose: null,
-    readyState: 0,
-    close: jest.fn(),
-    CONNECTING: 0,
-    OPEN: 1,
-    CLOSING: 2,
-    CLOSED: 3
-}));
-
-// Add static properties to WebSocket mock
-Object.assign((global as any).WebSocket, {
-    CONNECTING: 0,
-    OPEN: 1,
-    CLOSING: 2,
-    CLOSED: 3
-});
+// Mock EventSource with proper typing
 
 (global as any).EventSource = jest.fn().mockImplementation(() => ({
     onopen: null,
@@ -65,9 +45,12 @@ describe('DashboardClient', () => {
         jest.spyOn(console, 'error').mockImplementation();
     });
 
-    afterEach(() => {
+    afterEach(async () => {
         // Ensure client is unsubscribed and cleaned up
         client.unsubscribe();
+
+        // Wait a bit for any pending async operations to complete
+        await new Promise(resolve => setTimeout(resolve, 10));
 
         // Restore all mocks
         jest.restoreAllMocks();
@@ -109,13 +92,15 @@ describe('DashboardClient', () => {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': 'Bearer test-api-key'
+                        'Authorization': 'Bearer test-api-key',
+                        'Accept': 'application/json'
                     },
                     body: JSON.stringify({
                         ...log,
                         projectId: 'test-project'
                     }),
-                    signal: expect.any(AbortSignal)
+                    signal: expect.any(AbortSignal),
+                    mode: 'cors'
                 }
             );
         });
@@ -240,9 +225,11 @@ describe('DashboardClient', () => {
                 'https://api.tokenix.com/api/v1/config',
                 {
                     headers: {
-                        'Authorization': 'Bearer test-api-key'
+                        'Authorization': 'Bearer test-api-key',
+                        'Accept': 'application/json'
                     },
-                    signal: expect.any(AbortSignal)
+                    signal: expect.any(AbortSignal),
+                    mode: 'cors'
                 }
             );
         });
@@ -281,17 +268,12 @@ describe('DashboardClient', () => {
             client.subscribeToConfigUpdates(mockCallback);
             client.subscribeToConfigUpdates(mockCallback);
 
-            // Should only create one WebSocket connection
-            expect((global as any).WebSocket).toHaveBeenCalledTimes(1);
+            // Should only create one EventSource connection
+            expect((global as any).EventSource).toHaveBeenCalledTimes(1);
         });
 
-        it('should fallback to polling when WebSocket and SSE fail', async () => {
+        it('should fallback to polling when SSE fails', async () => {
             const mockCallback = jest.fn();
-
-            // Mock WebSocket to fail immediately
-            ((global as any).WebSocket as jest.Mock).mockImplementationOnce(() => {
-                throw new Error('WebSocket not supported');
-            });
 
             // Mock EventSource to fail immediately
             ((global as any).EventSource as jest.Mock).mockImplementationOnce(() => {
@@ -336,25 +318,24 @@ describe('DashboardClient', () => {
     });
 
     describe('unsubscribe', () => {
-        it('should cleanup WebSocket connection', () => {
-            const mockWs = {
+        it('should cleanup EventSource connection', () => {
+            const mockEventSource = {
                 close: jest.fn(),
                 onopen: null,
                 onmessage: null,
                 onerror: null,
-                onclose: null,
                 readyState: 1
             };
 
-            // Force WebSocket to be used and return our mock
-            ((global as any).WebSocket as jest.Mock).mockImplementationOnce(() => mockWs);
+            // Force EventSource to be used and return our mock
+            ((global as any).EventSource as jest.Mock).mockImplementationOnce(() => mockEventSource);
 
             // Manually set the client's subscription to our mock (simulate successful connection)
             client.subscribeToConfigUpdates(jest.fn());
-            (client as any).configSubscription = mockWs;
+            (client as any).configSubscription = mockEventSource;
 
             client.unsubscribe();
-            expect(mockWs.close).toHaveBeenCalled();
+            expect(mockEventSource.close).toHaveBeenCalled();
         });
 
         it('should cleanup polling interval', () => {
