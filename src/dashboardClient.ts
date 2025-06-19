@@ -90,6 +90,8 @@ export class DashboardClient {
                     const errorText = await response.text().catch(() => 'Unknown error');
                     throw new Error(`Dashboard API error: ${response.status} ${response.statusText} - ${errorText}`);
                 }
+
+                this.logInfo(`Reconciliation data posted successfully for ${payload.model}:${payload.feature}`);
             } catch (error) {
                 clearTimeout(timeoutId);
                 if (error instanceof Error && error.name === 'AbortError') {
@@ -123,7 +125,12 @@ export class DashboardClient {
      * Unsubscribe from config updates and cleanup resources
      */
     unsubscribe(): void {
+        if (!this.isSubscribed) {
+            return; // Already unsubscribed
+        }
+
         this.isSubscribed = false;
+        this.logInfo('Unsubscribing from config updates');
 
         if (this.configSubscription) {
             if ('close' in this.configSubscription) {
@@ -170,6 +177,7 @@ export class DashboardClient {
                 }
 
                 const config = await response.json() as SDKConfig;
+                this.logInfo(`Config fetched successfully from dashboard`);
                 return config;
             } catch (error) {
                 clearTimeout(timeoutId);
@@ -210,7 +218,7 @@ export class DashboardClient {
                 eventSource.onmessage = (event: MessageEvent) => {
                     try {
                         const config = JSON.parse(event.data) as SDKConfig;
-                        this.logInfo(`SSE config update received`);
+                        this.logInfo(`Config update received via SSE - applying new configuration`);
                         onUpdate(config);
                     } catch (error) {
                         this.logError('Failed to parse SSE config update', error);
@@ -240,12 +248,13 @@ export class DashboardClient {
      * Start polling for config updates as fallback
      */
     private startPolling(onUpdate: (config: SDKConfig) => void): void {
-        this.logInfo('Starting config polling fallback');
+        this.logInfo('Starting config polling fallback (30s intervals)');
 
         // Poll every 30 seconds
         this.pollingInterval = setInterval(async () => {
             try {
                 const config = await this.getConfig();
+                this.logInfo('Config updated via polling');
                 onUpdate(config);
             } catch (error) {
                 this.logError('Config polling failed', error);
@@ -254,7 +263,10 @@ export class DashboardClient {
 
         // Initial fetch
         this.getConfig()
-            .then(onUpdate)
+            .then((config) => {
+                this.logInfo('Initial config loaded via polling');
+                onUpdate(config);
+            })
             .catch((error) => this.logError('Initial config fetch failed', error));
     }
 

@@ -2,13 +2,14 @@ import {
     SDKConfig,
     ModelConfig,
     EstimateCreditsInput,
+    EstimateCreditsInputCustom,
     EstimateCreditsResult,
     ReconcileInput,
+    ReconcileInputCustom,
     ReconcileResult,
     WrapCallInput,
+    WrapCallInputCustom,
     WrapCallResult,
-    TokenExtractor,
-    TokenUsage,
     DashboardSyncConfig,
     ReconciliationLog
 } from './types';
@@ -65,17 +66,17 @@ export class LLMCreditSDK {
 
         // Listen for config updates
         this.eventEmitter.on('configUpdated', (newConfig: SDKConfig) => {
-            console.log('[LLMCreditSDK] Config updated', newConfig);
+            console.log('[LLMCreditSDK] Configuration updated from dashboard');
             this.config = newConfig;
         });
     }
 
     /**
      * Estimate credits for an LLM call before making it
-     * @param input - Parameters for credit estimation
+     * @param input - Parameters for credit estimation (supports both standard and custom models/features)
      * @returns Estimated number of credits
      */
-    estimateCredits(input: EstimateCreditsInput): EstimateCreditsResult {
+    estimateCredits(input: EstimateCreditsInput | EstimateCreditsInputCustom): EstimateCreditsResult {
         const { model, feature, promptTokens, completionTokens } = input;
 
         // Get model configuration
@@ -102,10 +103,10 @@ export class LLMCreditSDK {
 
     /**
      * Reconcile estimated vs actual usage after an LLM call
-     * @param input - Parameters for reconciliation
+     * @param input - Parameters for reconciliation (supports both standard and custom models/features)
      * @returns Reconciliation results with actual usage and delta
      */
-    reconcile(input: ReconcileInput): ReconcileResult {
+    reconcile(input: ReconcileInput | ReconcileInputCustom): ReconcileResult {
         const {
             model,
             feature,
@@ -157,19 +158,13 @@ export class LLMCreditSDK {
 
     /**
      * Wrap an LLM call with automatic credit estimation and reconciliation
-     * @param input - Parameters for the wrapped call
+     * @param input - Parameters for the wrapped call (supports both standard and custom models/features)
      * @returns Response from the LLM call plus reconciliation data
      */
-    async wrapCall<T>(input: WrapCallInput<T>): Promise<WrapCallResult<T>> {
+    async wrapCall<T>(input: WrapCallInput<T> | WrapCallInputCustom<T>): Promise<WrapCallResult<T>> {
         const { model, feature, promptTokens, completionTokens, callFunction, tokenExtractor } = input;
 
-        // Get initial estimate
-        const estimate = this.estimateCredits({
-            model,
-            feature,
-            promptTokens,
-            completionTokens
-        });
+        console.log(`[LLMCreditSDK] Wrapping call for ${model}:${feature} (estimated: ${promptTokens + completionTokens} tokens)`);
 
         // Make the actual LLM call
         const response = await callFunction();
@@ -197,6 +192,10 @@ export class LLMCreditSDK {
 
         // Post reconciliation data to dashboard (if enabled)
         // This is non-blocking and won't affect the response
+        if (this.dashboardSyncEnabled) {
+            console.log(`[LLMCreditSDK] Sending reconciliation data for ${model}:${feature} to dashboard`);
+        }
+
         this.postReconciliationToDashboard({
             model,
             feature,
@@ -325,7 +324,7 @@ export class LLMCreditSDK {
                 this.eventEmitter.emit('configUpdated', newConfig);
             });
 
-            console.log('[LLMCreditSDK] Dashboard sync enabled');
+            console.log(`[LLMCreditSDK] Dashboard sync enabled with endpoint: ${config.endpoint}`);
         } catch (error) {
             console.error('[LLMCreditSDK] Failed to enable dashboard sync:', error);
             this.dashboardSyncEnabled = false;
@@ -397,6 +396,7 @@ export class LLMCreditSDK {
 
             // Non-blocking call - errors are handled internally by DashboardClient
             await this.dashboardClient.postReconciliation(log);
+            console.log(`[LLMCreditSDK] Reconciliation data successfully sent to dashboard for ${reconciliationData.model}:${reconciliationData.feature}`);
         } catch (error) {
             // Log error but don't throw - maintain non-blocking behavior
             console.error('[LLMCreditSDK] Failed to post reconciliation to dashboard:', error);

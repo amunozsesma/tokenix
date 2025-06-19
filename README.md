@@ -177,6 +177,99 @@ console.log('Credits used:', result.reconciliation.actualTokensUsed);
 ### Cohere
 - `cohere:command`
 
+## Type Safety & Custom Models
+
+### Type-Safe Usage (Recommended)
+
+The SDK provides full TypeScript type safety for supported models and features:
+
+```typescript
+import { LLMCreditSDK, SupportedModel, SupportedFeature } from 'llm-credit-sdk';
+
+const sdk = new LLMCreditSDK();
+
+// TypeScript will autocomplete and validate these values
+const estimate = sdk.estimateCredits({
+  model: 'openai:gpt-4',     // ✅ TypeScript suggests all supported models
+  feature: 'chat',           // ✅ TypeScript validates available features
+  promptTokens: 100,
+  completionTokens: 50
+});
+```
+
+**Supported Models & Features:**
+- **Models**: `openai:gpt-4`, `openai:gpt-4-turbo`, `openai:gpt-3.5-turbo`, `anthropic:claude-3-opus`, `anthropic:claude-3-sonnet`, `anthropic:claude-3-haiku`, `together:llama3-8b`, `together:llama3-70b`, `cohere:command`
+- **Features**: `chat`, `summarize`, `generate_code`, `translate`
+
+### Using Custom Models & Features
+
+To use models or features not in the default list, you need to configure them and use explicit typing:
+
+```typescript
+import { LLMCreditSDK, WrapCallInputCustom } from 'llm-credit-sdk';
+
+// 1. Configure SDK with custom models
+const sdk = new LLMCreditSDK({
+  models: {
+    'custom:my-model': {
+      prompt_cost_per_1k: 0.005,
+      completion_cost_per_1k: 0.01,
+      features: {
+        'document_analysis': { margin: 2.5 }
+      }
+    }
+  }
+});
+
+// 2. Use explicit typing for custom models
+const result = await sdk.wrapCall({
+  model: 'custom:my-model',
+  feature: 'document_analysis',
+  promptTokens: 500,
+  completionTokens: 200,
+  callFunction: async () => {
+    // Your custom AI service call
+    return await myCustomAI.analyze(document);
+  }
+} as WrapCallInputCustom);
+```
+
+### Best Practices for Custom Models
+
+Create type-safe wrappers for your custom models:
+
+```typescript
+// Define your custom types
+type MyCustomModel = 'custom:my-model' | 'custom:another-model';
+type MyCustomFeatures = 'document_analysis' | 'data_extraction';
+
+// Create a type-safe wrapper function
+async function callCustomModel(
+  model: MyCustomModel,
+  feature: MyCustomFeatures,
+  promptTokens: number,
+  completionTokens: number,
+  callFunction: () => Promise<any>
+) {
+  return sdk.wrapCall({
+    model,
+    feature,
+    promptTokens,
+    completionTokens,
+    callFunction
+  } as WrapCallInputCustom);
+}
+
+// Now you have type safety for your custom models
+const result = await callCustomModel(
+  'custom:my-model',           // ✅ TypeScript validates this
+  'document_analysis',         // ✅ TypeScript validates this
+  500,
+  200,
+  async () => await myAI.analyze(doc)
+);
+```
+
 ## Custom Configuration
 
 Override default pricing and add your own models:

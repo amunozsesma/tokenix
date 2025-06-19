@@ -346,6 +346,7 @@ describe('DashboardClient', () => {
 
             // Manually set a polling interval to test cleanup
             (client as any).pollingInterval = mockIntervalId;
+            (client as any).isSubscribed = true; // Ensure it's subscribed
 
             client.unsubscribe();
             expect(clearIntervalSpy).toHaveBeenCalledWith(mockIntervalId);

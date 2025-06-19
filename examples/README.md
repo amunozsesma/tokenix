@@ -151,4 +151,59 @@ Found a useful pattern? Submit a PR with a new example! We especially welcome:
 - Integration examples with other LLM providers
 - Advanced billing patterns
 - Performance optimization techniques
-- Real-world production setups 
+- Real-world production setups
+
+## Files
+
+### `custom-models-features.ts`
+
+Demonstrates the new type safety features and how to extend the SDK with custom models and features.
+
+**Key Features Shown:**
+- ✅ Type-safe usage with supported models/features (autocomplete & validation)
+- ✅ Adding custom models and features to the SDK configuration
+- ✅ Using explicit typing for custom models (`WrapCallInputCustom`)
+- ✅ Creating type-safe wrappers for custom models
+- ✅ Custom token extractors for non-standard AI services
+
+**Run the example:**
+```bash
+npx ts-node examples/custom-models-features.ts
+```
+
+## Type Safety Overview
+
+The SDK now provides two ways to use models and features:
+
+### 1. Type-Safe (Recommended)
+```typescript
+// Full TypeScript autocomplete and validation
+sdk.wrapCall({
+  model: 'openai:gpt-4',  // TypeScript suggests valid options
+  feature: 'chat',        // TypeScript validates features
+  // ...
+});
+```
+
+### 2. Custom Models/Features
+```typescript
+// Requires explicit typing for custom models
+sdk.wrapCall({
+  model: 'my-custom:model',
+  feature: 'custom-feature',
+  // ...
+} as WrapCallInputCustom);
+```
+
+## Supported Out-of-the-Box
+
+**Models:**
+- `openai:gpt-4`, `openai:gpt-4-turbo`, `openai:gpt-3.5-turbo`
+- `anthropic:claude-3-opus`, `anthropic:claude-3-sonnet`, `anthropic:claude-3-haiku`
+- `together:llama3-8b`, `together:llama3-70b`
+- `cohere:command`
+
+**Features:**
+- `chat`, `summarize`, `generate_code`, `translate`
+
+For anything not in these lists, you can extend the SDK as shown in the examples. 
